@@ -1,0 +1,28 @@
+#!/c:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe
+$ErrorActionPreference = "Stop"
+
+# Obtiene los archivos en staging dentro de 'code/logicapps/'
+$stagedFiles = git diff --cached --name-only | Where-Object { $_ -match "^code/logicapps/.*\.json$" -and $_ -notmatch "/\." }
+
+# Expresiones regulares para detectar valores NO permitidos en "defaultValue"
+$forbiddenPatterns = @(
+    #'([^{}"][^"]*)',  # Detecta valores que NO estÃ©n en formato {Placeholder}
+    '([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})' # Detecta GUIDs
+
+foreach ($file in $stagedFiles) {
+    $content = Get-Content $file -Raw
+    foreach ($pattern in $forbiddenPatterns) {
+        if ($content -match $pattern) {
+            $errors += $file
+        }
+    }
+}
+
+if ($errors.Count -gt 0) {
+    Write-Host "ERROR: Se encontraron valores NO permitidos en los siguientes archivos JSON:" -ForegroundColor Red
+    foreach ($file in $errors) {
+        Write-Host "  - $file" -ForegroundColor Yellow
+    }
+    Write-Host "Asegúrate de que los valores de 'defaultValue' sigan el formato '{Placeholder}' y no contengan GUIDs u otros datos sensibles." -ForegroundColor Red
+    exit 1
+}
