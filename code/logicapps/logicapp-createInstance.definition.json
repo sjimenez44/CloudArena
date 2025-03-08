@@ -1,0 +1,162 @@
+{
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "triggers": {
+        "http": {
+            "type": "Request",
+            "kind": "Http",
+            "inputs": {
+                "method": "POST"
+            },
+            "conditions": []
+        }
+    },
+    "parameters": {
+        "domainAD": {
+            "defaultValue": "{DomainAD}",
+            "type": "String"
+        },
+        "labUsersGroupId": {
+            "defaultValue": "{LabUsersSecGroupId}",
+            "type": "String"
+        },
+        "subsId": {
+            "defaultValue": "{SubsId}",
+            "type": "String"
+        },
+        "locationRG": {
+            "defaultValue": "{Location}",
+            "type": "String"
+        },
+        "$connections": {
+            "type": "Object",
+            "defaultValue": {}
+        }
+    },
+    "outputs": {},
+    "actions": {
+        "Set_User_GUID": {
+            "runAfter": {},
+            "type": "InitializeVariable",
+            "inputs": {
+                "variables": [
+                    {
+                        "name": "userGuid",
+                        "type": "String",
+                        "value": "@concat(substring(guid(), 0, 6), '-', substring(base64(guid()), 0, 6))"
+                    }
+                ]
+            }
+        },
+        "ComposeMsg": {
+            "runAfter": {
+                "Set_User_GUID": [
+                    "Succeeded"
+                ]
+            },
+            "type": "Compose",
+            "inputs": {
+                "userDisplayName": "@{concat('lab_user_main-', variables('userGuid'))}",
+                "userMail": "@{concat('lab_user_main-', variables('userGuid'), '@', parameters('domainAD'))}",
+                "userPassword": "@{base64(guid())}",
+                "userRg": "@{concat('kml_rg_main-', variables('userGuid'))}"
+            }
+        },
+        "CreateUser": {
+            "runAfter": {
+                "ComposeMsg": [
+                    "Succeeded"
+                ]
+            },
+            "type": "Http",
+            "inputs": {
+                "uri": "https://graph.microsoft.com/v1.0/users",
+                "method": "POST",
+                "body": {
+                    "accountEnabled": true,
+                    "displayName": "@{outputs('ComposeMsg')['userDisplayName']}",
+                    "userPrincipalName": "@{outputs('ComposeMsg')['userMail']}",
+                    "mailNickname": "@{outputs('ComposeMsg')['userDisplayName']}",
+                    "passwordProfile": {
+                        "forceChangePasswordNextSignIn": false,
+                        "password": "@{outputs('ComposeMsg')['userPassword']}"
+                    }
+                },
+                "authentication": {
+                    "type": "ManagedServiceIdentity",
+                    "audience": "https://graph.microsoft.com/\n"
+                }
+            },
+            "runtimeConfiguration": {
+                "contentTransfer": {
+                    "transferMode": "Chunked"
+                }
+            }
+        },
+        "AddUser2Group": {
+            "runAfter": {
+                "CreateUser": [
+                    "Succeeded"
+                ]
+            },
+            "type": "Http",
+            "inputs": {
+                "uri": "https://graph.microsoft.com/v1.0/groups/@{parameters('labUsersGroupId')}/members/$ref",
+                "method": "POST",
+                "body": {
+                    "@@odata.id": "https://graph.microsoft.com/v1.0/users/@{body('CreateUser')['id']}"
+                },
+                "authentication": {
+                    "type": "ManagedServiceIdentity",
+                    "audience": "https://graph.microsoft.com/\n"
+                }
+            },
+            "runtimeConfiguration": {
+                "contentTransfer": {
+                    "transferMode": "Chunked"
+                }
+            }
+        },
+        "CreateUserRG": {
+            "runAfter": {
+                "AddUser2Group": [
+                    "Succeeded"
+                ]
+            },
+            "type": "Http",
+            "inputs": {
+                "uri": "https://management.azure.com/subscriptions/@{parameters('subsId')}/resourceGroups/@{outputs('ComposeMsg')['userRg']}?api-version=2021-04-01",
+                "method": "PUT",
+                "body": {
+                    "location": "@{parameters('locationRG')}"
+                },
+                "authentication": {
+                    "type": "ManagedServiceIdentity",
+                    "audience": "https://management.azure.com/"
+                }
+            },
+            "runtimeConfiguration": {
+                "contentTransfer": {
+                    "transferMode": "Chunked"
+                }
+            }
+        },
+        "Response": {
+            "runAfter": {
+                "CreateUserRG": [
+                    "Succeeded"
+                ]
+            },
+            "type": "Response",
+            "kind": "Http",
+            "inputs": {
+                "statusCode": 200,
+                "body": {
+                    "portalUrl": "@{concat('https://portal.azure.com/', parameters('domainAD'))}",
+                    "userMail": "@{outputs('ComposeMsg')['userMail']}",
+                    "userPassword": "@{outputs('ComposeMsg')['userPassword']}"
+                }
+            }
+        }
+    }
+}

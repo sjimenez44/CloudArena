@@ -1,0 +1,111 @@
+{
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "triggers": {
+        "http": {
+            "type": "Request",
+            "kind": "Http"
+        }
+    },
+    "parameters": {
+        "SubsId": {
+            "defaultValue": "{SubsId}",
+            "type": "String"
+        },
+        "$connections": {
+            "type": "Object",
+            "defaultValue": {}
+        }
+    },
+    "outputs": {},
+    "actions": {
+        "GetUserRG": {
+            "runAfter": {},
+            "type": "InitializeVariable",
+            "inputs": {
+                "variables": [
+                    {
+                        "name": "userRg",
+                        "type": "String",
+                        "value": "@concat('kml_rg', last(split(first(split(triggerBody()['userMail'], '@')), 'user')))"
+                    }
+                ]
+            }
+        },
+        "DeleteUserRG": {
+            "runAfter": {
+                "GetUserRG": [
+                    "Succeeded"
+                ]
+            },
+            "type": "Http",
+            "inputs": {
+                "uri": "https://management.azure.com/subscriptions/@{parameters('SubsId')}/resourceGroups/@{variables('userRg')}?api-version=2021-04-01",
+                "method": "DELETE",
+                "authentication": {
+                    "type": "ManagedServiceIdentity",
+                    "audience": "https://management.azure.com/"
+                }
+            },
+            "runtimeConfiguration": {
+                "contentTransfer": {
+                    "transferMode": "Chunked"
+                }
+            }
+        },
+        "GetUserID": {
+            "runAfter": {
+                "DeleteUserRG": [
+                    "Succeeded"
+                ]
+            },
+            "type": "Http",
+            "inputs": {
+                "uri": "https://graph.microsoft.com/v1.0/users/@{triggerBody()['userMail']}",
+                "method": "GET",
+                "authentication": {
+                    "type": "ManagedServiceIdentity",
+                    "audience": "https://graph.microsoft.com/"
+                }
+            },
+            "runtimeConfiguration": {
+                "contentTransfer": {
+                    "transferMode": "Chunked"
+                }
+            }
+        },
+        "DeleteUser": {
+            "runAfter": {
+                "GetUserID": [
+                    "Succeeded"
+                ]
+            },
+            "type": "Http",
+            "inputs": {
+                "uri": "https://graph.microsoft.com/v1.0/users/@{body('GetUserID')['id']}",
+                "method": "DELETE",
+                "authentication": {
+                    "type": "ManagedServiceIdentity",
+                    "audience": "https://graph.microsoft.com/"
+                }
+            },
+            "runtimeConfiguration": {
+                "contentTransfer": {
+                    "transferMode": "Chunked"
+                }
+            }
+        },
+        "Response": {
+            "runAfter": {
+                "DeleteUser": [
+                    "Succeeded"
+                ]
+            },
+            "type": "Response",
+            "kind": "Http",
+            "inputs": {
+                "statusCode": 200
+            }
+        }
+    }
+}
