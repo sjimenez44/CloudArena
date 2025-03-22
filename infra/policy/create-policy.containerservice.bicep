@@ -3,11 +3,11 @@ targetScope = 'subscription'
 param versionName string
 
 resource policyDefintion 'Microsoft.Authorization/policyDefinitions@2025-01-01' = {
-  name: 'pd-Container_Instance-${versionName}'
+  name: 'pd-Container_Service-${versionName}'
   properties: {
     mode: 'All'
-    displayName: 'Container_Instance'
-    description: 'Restrictions for container instances'
+    displayName: 'Container_Service'
+    description: 'Restrictions for container service'
     policyType: 'Custom'
     metadata: {
       category: 'Global Restriction'
