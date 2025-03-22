@@ -3,7 +3,7 @@ targetScope = 'subscription'
 param versionName string
 
 resource policyDefintion 'Microsoft.Authorization/policyDefinitions@2025-01-01' = {
-  name: 'pd-${guid(subscription().id, 'Container_Registry', versionName)}'
+  name: 'pd-Container_Registry-${versionName}'
   properties: {
     mode: 'All'
     displayName: 'Container_Registry'

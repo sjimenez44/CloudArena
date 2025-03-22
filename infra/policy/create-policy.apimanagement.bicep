@@ -3,7 +3,7 @@ targetScope = 'subscription'
 param versionName string
 
 resource policyDefintion 'Microsoft.Authorization/policyDefinitions@2025-01-01' = {
-  name: 'pd-${guid(subscription().id, 'API_Management', versionName)}'
+  name: 'pd-API_Management-${versionName}'
   properties: {
     mode: 'All'
     displayName: 'API_Management'
